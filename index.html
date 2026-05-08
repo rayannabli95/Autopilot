@@ -5888,6 +5888,8 @@ function buildSplash(){
       const profEmail=profile?.email||email;
       if(nom){curNom=nom;curEmail=profEmail;}
       try{localStorage.setItem('ap-role',role);localStorage.setItem('ap-email',profEmail);if(nom)localStorage.setItem('ap-nom',nom);}catch(_){}
+      // Vider les mock events AVANT de rendre l'interface (évite d'afficher Marco pour Sherine)
+      EVENTS=[];
       btn.disabled=false;btn.textContent='Se connecter';
       hideAuth();switchRole(role);
       if(nom&&role==='eleve')applyElvName(nom,profEmail);
@@ -5902,9 +5904,21 @@ function buildSplash(){
           });
         }
         if(role==='moniteur'){
-          loadEventsFromDB().then(()=>{renderSbNav();});
+          loadEventsFromDB().then(()=>{
+            // Re-rendre le planning avec les VRAIS events de ce moniteur
+            renderSbNav();
+            buildCalendar('cal-head','cal-body',calOff);
+            renderToday();
+            renderPendingRequests();
+          });
           loadLieuxFromDB(currentProfileId).then(()=>buildLieux());
           loadNotesPrivFromDB(currentProfileId);
+        }
+        if(role==='admin'){
+          loadEventsFromDB().then(()=>{
+            renderAdmin();
+            buildCalendar('cal-head','cal-body',acalOff);
+          });
         }
         loadNotationsFromDB();
       }
@@ -6069,7 +6083,9 @@ function init(){
       }
       // Re-rendre les pages qui dépendent de ces données
       renderEleves(ELEVES);populateMonSelect();
+      renderSbNav();
       buildCalendar('cal-head','cal-body',calOff);
+      if(curPage==='planning'){renderToday();renderPendingRequests();}
       if(curPage==='admin')renderAdmin();
       if(curPage==='espace-eleve')renderEspaceEleve();
       if(curPage==='profil-eleve')renderProfilEleve();
