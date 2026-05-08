@@ -763,6 +763,11 @@ textarea.fi{resize:vertical;min-height:65px;}
       <div class="cb" id="admin-quick-actions"></div>
     </div>
   </div>
+  <!-- Heatmap créneaux -->
+  <div class="card mb5" id="admin-heatmap-card" style="display:none">
+    <div class="ch"><div class="ct">🔥 Activité créneaux — cette semaine</div><span class="sm mu" id="heatmap-lbl"></span></div>
+    <div class="cb" id="admin-heatmap"></div>
+  </div>
   <!-- Panel gestion équipes -->
   <div class="card mb5" id="admin-equipe-card">
     <div class="ch">
@@ -1152,7 +1157,7 @@ textarea.fi{resize:vertical;min-height:65px;}
 <div class="page" id="page-espace-eleve">
   <!-- v6.5 — Hero clarifié : prochaine leçon en gros + 3 stats utiles (sans flamme confuse) -->
   <div style="background:linear-gradient(145deg,#111827,#1F2937);border-radius:var(--rx);padding:20px;color:#fff;margin-bottom:18px;box-shadow:var(--s3)">
-    <div style="font-family:var(--fd);font-size:clamp(16px,4vw,21px);font-weight:800">Bonjour, Arnaud 👋</div>
+    <div id="elv-greeting" style="font-family:var(--fd);font-size:clamp(16px,4vw,21px);font-weight:800">Bonjour, Arnaud 👋</div>
     <!-- Carte "PROCHAIN COURS" ultra-visible -->
     <div id="elv-next-lesson" style="background:rgba(37,99,235,.18);border:1px solid rgba(147,197,253,.35);border-radius:var(--rl);padding:14px;margin-top:12px"></div>
     <!-- 3 stats utiles : conduite, restant, progression -->
@@ -1204,7 +1209,7 @@ textarea.fi{resize:vertical;min-height:65px;}
 <div class="page" id="page-livret-eleve">
   <div class="xpb">
     <div class="fx jb aic mb3 fw" style="gap:9px">
-      <div><div style="font-family:var(--fd);font-size:14px;font-weight:800">Ma progression · Arnaud Kenfack</div><div style="font-size:11px;color:rgba(255,255,255,.35);margin-top:3px">Autopilot · Auto-École du Centre</div></div>
+      <div><div id="elv-progress-name" style="font-family:var(--fd);font-size:14px;font-weight:800">Ma progression · Arnaud Kenfack</div><div style="font-size:11px;color:rgba(255,255,255,.35);margin-top:3px">Autopilot · Auto-École du Centre</div></div>
       <div style="background:var(--a);color:#fff;font-size:11px;font-weight:700;padding:3px 11px;border-radius:20px" id="xp-lv">En route ! 🚦</div>
     </div>
     <div class="xpb-bar mb2"><div class="xpb-fill" id="xp-bar" style="width:10%"></div></div>
@@ -1490,7 +1495,9 @@ textarea.fi{resize:vertical;min-height:65px;}
       </div>
       <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
         <div class="fg"><label class="fl">Plafond h/sem</label><input class="fi" id="mon-f-max" type="number" value="35" min="1" max="60"></div>
+        <div class="fg"><label class="fl">Mot de passe provisoire</label><input class="fi" id="mon-f-pwd" type="password" placeholder="Min. 8 caractères" maxlength="60"></div>
       </div>
+      <div style="font-size:11px;color:var(--mu);padding:8px 0">🔑 Si un email + mot de passe sont renseignés, un compte de connexion sera créé automatiquement.</div>
     </div>
     <div class="mft"><button class="btn btn-g" data-close="m-add-mon">Annuler</button><button class="btn btn-p" id="btn-save-mon">💾 Enregistrer</button></div>
   </div>
@@ -1527,6 +1534,8 @@ textarea.fi{resize:vertical;min-height:65px;}
           </select>
         </div>
       </div>
+      <div class="fg" style="margin-top:4px"><label class="fl">Mot de passe provisoire</label><input class="fi" id="elv-f-pwd" type="password" placeholder="Min. 8 caractères" maxlength="60"></div>
+      <div style="font-size:11px;color:var(--mu);padding:4px 0">🔑 Si email + mot de passe renseignés, un compte de connexion sera créé automatiquement.</div>
     </div>
     <div class="mft"><button class="btn btn-g" data-close="m-add-elv">Annuler</button><button class="btn btn-p" id="btn-save-elv">💾 Enregistrer</button></div>
   </div>
@@ -1636,6 +1645,13 @@ function setupRealtime(){
 // ── État profil connecté ──
 let currentProfileId=null;
 let currentFicheEleveId=null;
+let curNom=null;
+let curEmail=null;
+function applyElvName(nom,email){
+  curNom=nom;if(email)curEmail=email;
+  const g=document.getElementById('elv-greeting');if(g)g.textContent='Bonjour, '+nom.split(' ')[0]+' 👋';
+  const p=document.getElementById('elv-progress-name');if(p)p.textContent='Ma progression · '+nom;
+}
 
 // ── Chargement depuis les nouvelles tables ──
 async function loadREMCFromDB(profileId){
@@ -2280,7 +2296,7 @@ function openEndOfLessonEleve(ev){
   const dn=WEEK_DAYS[ev.d-1]||'';
   const dd=DATES[ev.d-1]||'';
   const info=document.getElementById('m-end-eleve-info');
-  if(info)info.innerHTML=`<div style="font-weight:700">🚗 Leçon de ${ev.h} avec Marco Dominguez</div><div style="font-size:11.5px;color:var(--mu);margin-top:2px">${dn} ${dd} · ${ev.dur||1}h · presque terminée</div>`;
+  if(info)info.innerHTML=`<div style="font-weight:700">🚗 Leçon de ${ev.h} avec ${esc(curNom||ev.mon_nom||'votre moniteur')}</div><div style="font-size:11.5px;color:var(--mu);margin-top:2px">${dn} ${dd} · ${ev.dur||1}h · presque terminée</div>`;
   // Stars
   let stars=4;
   const sr=document.getElementById('end-stars');
@@ -2417,7 +2433,8 @@ const PT={
 function renderSbNav(){
   const cfg=ROLES[curRole];
   tx('sb-role-ico',cfg.roleE);tx('sb-role-n',cfg.roleN);
-  tx('sb-uav',cfg.u.e);tx('sb-un',cfg.u.n.split(' ')[0]);tx('sb-ur',cfg.u.r);
+  const _sbNom=curNom||cfg.u.n;
+  tx('sb-uav',cfg.u.e);tx('sb-un',_sbNom.split(' ')[0]);tx('sb-ur',cfg.u.r);
   document.getElementById('sb-uav').textContent=cfg.u.e;
   const w=document.getElementById('sb-nav');if(!w)return;w.innerHTML='';
   cfg.nav.forEach(sec=>{
@@ -2558,22 +2575,36 @@ function renderAdmin(){
     const n=new Date();c.textContent=String(n.getHours()).padStart(2,'0')+':'+String(n.getMinutes()).padStart(2,'0');
   },30000);
 
-  // KPIs dashboard admin (spec v6)
+  // KPIs dashboard admin — calculés depuis données réelles
+  const _elvActifs=ELEVES.filter(e=>e.s==='Actif').length;
+  const _elvTotal=ELEVES.length;
+  const _hMois=MONS.reduce((s,m)=>s+getHeureMois(m.n).heures,0);
+  const _evConf=EVENTS.filter(e=>e.t==='conf'||e.t==='lecon').length;
+  const _evTot=EVENTS.filter(e=>e.t==='conf'||e.t==='pend'||e.t==='lecon').length;
+  const _tauxPres=_evTot?Math.round(_evConf/_evTot*100):(_elvActifs>0?100:0);
+  const _revMois=Math.round(_hMois*45);
+  const _pendingEv=EVENTS.filter(e=>e.t==='pend').length;
   const KPIS=[
-    {c:'gn', ico:'👥', v:47,    suffix:'',  l:'Élèves actifs',   tr:'↑ +3 ce mois',up:true,  nav:'eleves'},
-    {c:'pu', ico:'⏱', v:312,   suffix:'h', l:'Heures ce mois',  tr:'↑ +18h vs mois dern.',up:true, nav:'assiduite'},
-    {c:'or', ico:'📊', v:94,    suffix:'%', l:'Taux de présence', tr:'↑ +2% vs mois dern.',up:true, nav:'assiduite'},
-    {c:'bl', ico:'💶', v:12400, suffix:'€', l:'Revenus du mois', tr:'↑ +480€ vs mois dern.',up:true, nav:null},
+    {c:'gn', ico:'👥', v:_elvActifs, suffix:'', l:'Élèves actifs', tr:_elvTotal>_elvActifs?(_elvTotal-_elvActifs)+' inactif(s)':'Tous actifs ✅', up:_elvActifs>0, nav:'eleves'},
+    {c:'pu', ico:'⏱', v:_hMois, suffix:'h', l:'Heures ce mois', tr:_hMois>0?'~'+Math.round(_hMois/Math.max(1,MONS.length))+'h/moniteur':'Aucune heure', up:_hMois>0, nav:'assiduite'},
+    {c:'or', ico:'📊', v:_tauxPres, suffix:'%', l:'Taux de présence', tr:_tauxPres>=80?'✅ Objectif atteint':_tauxPres>=50?'⚠️ À améliorer':'⚠️ Faible', up:_tauxPres>=70, nav:'assiduite'},
+    {c:'bl', ico:'💶', v:_revMois, suffix:'€', l:'Revenus estimés', tr:_revMois>0?'~45€/h · '+_evConf+' leçon(s)':'Aucune leçon', up:_revMois>0, nav:null},
   ];
   const kw=document.getElementById('admin-kpis');if(!kw)return;kw.innerHTML='';
   KPIS.forEach((k,idx)=>{
     const d=document.createElement('div');d.className='kpi '+(k.c||'');
+    d.setAttribute('role','button');d.setAttribute('tabindex','0');
+    d.setAttribute('aria-label',k.l+' : '+k.v.toLocaleString('fr-FR')+(k.suffix||'')+'. '+k.tr);
+    d.style.minHeight='52px';
     const ic=document.createElement('div');ic.className='kpi-ico';ic.textContent=k.ico;
+    ic.setAttribute('aria-hidden','true');
     const vl=document.createElement('div');vl.className='kpi-v';vl.textContent='0'+(k.suffix||'');
     const lb=document.createElement('div');lb.className='kpi-l';lb.textContent=k.l;
     const tr=document.createElement('div');tr.className='kpi-tr '+(k.up?'up':'dn');tr.textContent=k.tr;
     d.appendChild(ic);d.appendChild(vl);d.appendChild(lb);d.appendChild(tr);
-    d.addEventListener('click',()=>{if(k.nav)navTo(k.nav,{eleves:'Élèves',assiduite:'Assiduité'}[k.nav]);else toast('💶 '+k.l+' : '+k.v.toLocaleString('fr-FR')+(k.suffix||''));});
+    const _kClick=()=>{if(k.nav)navTo(k.nav,{eleves:'Élèves',assiduite:'Assiduité'}[k.nav]);else toast('💶 '+k.l+' : '+k.v.toLocaleString('fr-FR')+(k.suffix||''));};
+    d.addEventListener('click',_kClick);
+    d.addEventListener('keydown',e=>{if(e.key==='Enter'||e.key===' '){e.preventDefault();_kClick();}});
     kw.appendChild(d);
     // Revenus : count-up sans décimales, séparateur de milliers affiché en fin
     setTimeout(()=>{
@@ -2596,12 +2627,16 @@ function renderAdmin(){
   // ⚖️ Gap offre/demande — pour aider le gérant à recruter / redistribuer
   renderAdminGap();
 
-  // Alertes &amp; Risques (spec v6)
-  const ALERTS=[
-    {t:'a',ico:'⚠️',tt:'3 élèves inactifs depuis 14 jours',    d:'Elyaqim D., Ramatoulaye F., Mohamed B. · Relance recommandée',     nav:'eleves',    navT:'Élèves'},
-    {t:'r',ico:'🔴',tt:'Marco dépasse son plafond ce vendredi', d:'38h planifiées sur 35h max · Risque de refus de leçon',           nav:'cal-admin',  navT:'Calendrier'},
-    {t:'b',ico:'ℹ️', tt:'2 lieux de RDV sans créneau cette sem.',d:'Paris – Porte de Clichy · Paris – Porte de La Villette',          nav:'assiduite',  navT:'Assiduité'},
-  ];
+  // Alertes &amp; Risques — calculées depuis données réelles
+  const ALERTS=[];
+  const _inactifs14=ELEVES.filter(e=>e.s!=='Actif'||parseInt(e.d)>=14);
+  if(_inactifs14.length)ALERTS.push({t:'a',ico:'⚠️',tt:_inactifs14.length+' élève(s) inactif(s) depuis 14+ jours',d:_inactifs14.slice(0,3).map(e=>e.n.split(' ')[0]).join(', ')+(_inactifs14.length>3?' + '+(_inactifs14.length-3)+' autres':'')+' · Relance recommandée',nav:'eleves',navT:'Élèves'});
+  const _surPlafond=MONS.filter(m=>m.h>m.max);
+  if(_surPlafond.length)ALERTS.push({t:'r',ico:'🔴',tt:_surPlafond.map(m=>m.n.split(' ')[0]).join(', ')+' dépasse(nt) le plafond',d:_surPlafond.map(m=>m.h+'h planifiées sur '+m.max+'h max').join(' · ')+' · Risque de refus de leçon',nav:'cal-admin',navT:'Calendrier'});
+  if(_pendingEv>0)ALERTS.push({t:'a',ico:'⏳',tt:_pendingEv+' créneau(x) en attente de confirmation',d:'Des élèves attendent la confirmation de leur moniteur',nav:'cal-admin',navT:'Calendrier'});
+  const _presqueFini=ELEVES.filter(e=>e.s==='Actif'&&(e.h>=e.f-3));
+  if(_presqueFini.length)ALERTS.push({t:'b',ico:'🎓',tt:_presqueFini.length+' élève(s) presque prêt(s) pour l\'examen',d:_presqueFini.slice(0,3).map(e=>e.n.split(' ')[0]+'·'+e.h+'h/'+e.f+'h').join(' · '),nav:'eleves',navT:'Élèves'});
+  if(!ALERTS.length)ALERTS.push({t:'b',ico:'✅',tt:'Aucune alerte active',d:'Tout fonctionne normalement — bonne semaine !',nav:null,navT:''});
   const aw=document.getElementById('admin-alerts');if(!aw)return;aw.innerHTML='';
   tx('alert-count',ALERTS.filter(a=>a.t==='r').length.toString());
   ALERTS.forEach(a=>{
@@ -2641,6 +2676,8 @@ function renderAdmin(){
   renderAdminAI();
   // Panel gestion équipes
   renderEquipePanel();
+  // Heatmap créneaux
+  renderHeatmap();
 }
 
 function renderEquipePanel(){
@@ -2682,6 +2719,7 @@ function buildMonTable(el){
           document.getElementById('mon-f-email').value=m.email||'';
           document.getElementById('mon-f-max').value=m.max;
           document.getElementById('mon-f-pl').value=m.pl||'';
+          const _mpwd=document.getElementById('mon-f-pwd');if(_mpwd)_mpwd.value='';
           openM('m-add-mon');
         });
         const bd=document.createElement('button');bd.className='btn btn-sm';bd.style.cssText='background:var(--rd);color:#fff;padding:3px 8px;border-radius:5px;border:none;cursor:pointer;font-size:11px';bd.textContent='🗑';bd.title='Supprimer';
@@ -2725,6 +2763,7 @@ function buildElvTable(el){
           document.getElementById('elv-f-f').value=e.f;
           document.getElementById('elv-f-s').value=e.s||'Actif';
           document.getElementById('elv-f-code').value=e.code||'En cours';
+          const _epwd=document.getElementById('elv-f-pwd');if(_epwd)_epwd.value='';
           openM('m-add-elv');
         });
         const bd=document.createElement('button');bd.className='btn btn-sm';bd.style.cssText='background:var(--rd);color:#fff;padding:3px 8px;border-radius:5px;border:none;cursor:pointer;font-size:11px';bd.textContent='🗑';bd.title='Supprimer';
@@ -2790,18 +2829,21 @@ const AGENTS={
     desc:'Prépare le plan pédagogique de la prochaine leçon',
     ico:'📖',
     run(){
+      const ficheNom=document.getElementById('fiche-nm')?.textContent||ELEVES[0]?.n||'l\'élève';
+      const prenom=ficheNom.split(' ')[0];
       const done=Object.entries(CS).filter(([,v])=>v.lv==='v').map(([k])=>k);
       const enCours=Object.entries(CS).filter(([,v])=>v.lv==='o').map(([k])=>k);
+      const lieu=LIEUX_DATA[0]?.n||'votre lieu habituel';
       return {
-        title:'Plan de leçon recommandé — Arnaud Kenfack',
+        title:'Plan de leçon recommandé — '+ficheNom,
         summary:'Basé sur le livret REMC actuel : '+done.length+' compétences validées, '+enCours.length+' en cours.',
         list:[
           enCours.length?'🎯 Priorité : consolider '+enCours.slice(0,3).join(', '):'🎯 Toutes les compétences en cours sont validées !',
-          '📍 Lieu conseillé : Paris – Porte de Clichy (le plus pratique pour Arnaud)',
+          '📍 Lieu conseillé : '+lieu+' (le plus pratique pour '+prenom+')',
           '⏱ Durée recommandée : 1h30 (compétences C2e + C2g à réviser)',
           '💡 Astuce : commencer par une zone peu dense avant d\'attaquer les intersections',
         ],
-        actions:[{l:'Voir livret',cb:()=>navTo('livret','Livret — Arnaud Kenfack')},{l:'Créer créneau',cb:()=>openCreneau(null)}],
+        actions:[{l:'Voir livret',cb:()=>navTo('livret','Livret — '+ficheNom)},{l:'Créer créneau',cb:()=>openCreneau(null)}],
       };
     }
   },
@@ -2824,19 +2866,26 @@ const AGENTS={
     desc:'Prépare l\'élève pour son examen du permis',
     ico:'🏁',
     run(){
+      const nom=curNom||localStorage.getItem('ap-nom')||'l\'élève';
+      const prenom=nom.split(' ')[0];
       const done=Object.values(CS).filter(v=>v.lv==='v').length;
       const pct=Math.round(done/31*100);
+      const lessonsLeft=Math.max(0,Math.ceil((31-done)/3));
       return {
-        title:'Préparation examen — Arnaud Kenfack',
-        summary:'Progression REMC : '+pct+'% ('+done+'/31 compétences validées). Examen prévu le 11/05/2026.',
+        title:'Préparation examen — '+nom,
+        summary:'Progression REMC : '+pct+'% ('+done+'/31 compétences validées).',
         list:[
-          pct<50?'⚠️ Progression insuffisante — intensifier les leçons avant le 11 mai':'✅ Bonne progression !',
-          '📝 Réviser le Code de la route : intersections, voie rapide, priorités',
-          '🚗 Points à travailler : dépassements, conduite en agglomération dense',
-          '🎯 Objectif : atteindre 80% du livret REMC avant l\'examen',
-          '📅 Recommandation : 3 leçons supplémentaires de 2h avant le 11/05',
+          pct===0?'🚀 Démarrage — aucune compétence validée pour l\'instant. Commence par les bases !':
+          pct<30?'⚠️ Progression faible ('+pct+'%) — intensifier les leçons':
+          pct<60?'📈 Bonne dynamique ('+pct+'%) — continuer le rythme':
+          pct<80?'👍 Très bien ('+pct+'%) — quelques points restants':
+          '✅ Excellent ('+pct+'%) — '+prenom+' est prêt(e) pour l\'examen !',
+          '📝 Réviser le Code : intersections, voie rapide, priorités',
+          '🚗 Points clés : dépassements, conduite en agglomération',
+          done<31?'🎯 Objectif : valider encore '+(31-done)+' compétence(s) REMC':'🏆 Livret REMC complet !',
+          lessonsLeft>0?'📅 Recommandation : environ '+lessonsLeft+' leçon(s) supplémentaire(s)':'🎉 Niveau suffisant pour se présenter à l\'examen',
         ],
-        actions:[{l:'Voir livret',cb:()=>navTo('livret','Livret — Arnaud Kenfack')}],
+        actions:[{l:'Voir livret',cb:()=>navTo('livret','Livret — '+nom)}],
       };
     }
   },
@@ -2912,6 +2961,58 @@ function exportHeuresMonitor(m,d){
 }
 
 /* ⚖️ Gap offre/demande pour le gérant — aide à voir si recruter / redistribuer */
+function renderHeatmap(){
+  const card=document.getElementById('admin-heatmap-card');
+  const el=document.getElementById('admin-heatmap');
+  if(!el||!card)return;
+  if(!EVENTS.length){card.style.display='none';return;}
+  card.style.display='';
+  el.innerHTML='';
+  // Compter événements par heure (8h-19h) × jour (1=Lun..7=Dim)
+  const HOURS_HM=['08:00','09:00','10:00','11:00','12:00','13:00','14:00','15:00','16:00','17:00','18:00','19:00'];
+  const grid={};
+  EVENTS.forEach(e=>{
+    if(!e.h||!e.d)return;
+    const hh=e.h.substring(0,5);
+    if(!HOURS_HM.includes(hh))return;
+    const k=hh+'_'+e.d;
+    grid[k]=(grid[k]||0)+1;
+  });
+  const maxV=Math.max(1,...Object.values(grid));
+  const days=['L','M','M','J','V','S','D'];
+  // Wrapper
+  const wrap=document.createElement('div');wrap.style.cssText='overflow-x:auto;-webkit-overflow-scrolling:touch';
+  const tbl=document.createElement('div');tbl.style.cssText='display:grid;grid-template-columns:36px repeat(7,1fr);gap:3px;min-width:280px';
+  tbl.setAttribute('role','table');tbl.setAttribute('aria-label','Heatmap créneaux par heure et jour');
+  // Header jours
+  const empty=document.createElement('div');empty.style.cssText='height:24px';tbl.appendChild(empty);
+  days.forEach((d,i)=>{
+    const h=document.createElement('div');h.style.cssText='text-align:center;font-size:10px;font-weight:700;color:var(--mu);height:24px;display:flex;align-items:center;justify-content:center';
+    h.textContent=d;h.setAttribute('role','columnheader');tbl.appendChild(h);
+  });
+  // Lignes heures
+  HOURS_HM.forEach(hr=>{
+    const hl=document.createElement('div');hl.style.cssText='font-size:9px;color:var(--mu);display:flex;align-items:center;justify-content:flex-end;padding-right:5px;height:32px';hl.textContent=hr.slice(0,5);hl.setAttribute('role','rowheader');tbl.appendChild(hl);
+    for(let d=1;d<=7;d++){
+      const k=hr+'_'+d;const v=grid[k]||0;
+      const pct=v/maxV;
+      const alpha=v===0?0:Math.max(0.12,pct);
+      const cell=document.createElement('div');
+      cell.style.cssText='height:32px;border-radius:5px;background:rgba(37,99,235,'+alpha.toFixed(2)+');display:flex;align-items:center;justify-content:center;transition:.2s;cursor:'+(v?'pointer':'default');
+      cell.setAttribute('role','cell');cell.setAttribute('aria-label',days[d-1]+' '+hr+(v?' · '+v+' créneau(x)':' · vide'));
+      if(v){const vl=document.createElement('span');vl.style.cssText='font-size:9px;font-weight:800;color:'+(pct>0.5?'#fff':'var(--a)');vl.textContent=v;cell.appendChild(vl);}
+      if(v)cell.addEventListener('click',()=>toast('📅 '+days[d-1]+' '+hr+' — '+v+' créneau(x)'));
+      tbl.appendChild(cell);
+    }
+  });
+  wrap.appendChild(tbl);
+  // Légende
+  const leg=document.createElement('div');leg.style.cssText='display:flex;align-items:center;gap:8px;margin-top:10px;font-size:10px;color:var(--mu)';
+  leg.innerHTML='<span>Moins chargé</span><div style="display:flex;gap:2px">'+[0.12,0.3,0.5,0.7,1].map(a=>`<div style="width:14px;height:14px;border-radius:3px;background:rgba(37,99,235,${a})"></div>`).join('')+'</div><span>Plus chargé</span>';
+  el.appendChild(wrap);el.appendChild(leg);
+  tx('heatmap-lbl',EVENTS.length+' créneaux');
+}
+
 function renderAdminGap(){
   const el=document.getElementById('admin-gap');if(!el)return;el.innerHTML='';
   // OFFRE = total des plafonds moniteurs - heures déjà planifiées
@@ -3038,7 +3139,7 @@ function renderAssiduite(){
       const row=document.createElement('tr');row.style.cursor='pointer';
       row.addEventListener('mouseover',()=>row.style.background='var(--bg)');
       row.addEventListener('mouseout',()=>row.style.background='');
-      ['Marco Dominguez',ev.n,ev.h,ev.dur+'h','Confirmée'].forEach((v,i)=>{
+      [ev.mon_nom||curNom||'Moniteur',ev.n,ev.h,ev.dur+'h','Confirmée'].forEach((v,i)=>{
         const td=document.createElement('td');td.style.cssText='padding:10px 12px;border-bottom:1px solid var(--bo2);font-size:13px;'+(i===0?'font-weight:700':'');
         if(i===4){const bd=document.createElement('span');bd.className='bd bg';bd.textContent=v;td.appendChild(bd);}
         else td.textContent=v;row.appendChild(td);
@@ -4072,15 +4173,18 @@ function renderProfilMon(){
   avEdit.appendChild(fileInp);
   avW.appendChild(av);avW.appendChild(avEdit);
   const info=document.createElement('div');
-  const n=document.createElement('div');n.style.cssText='font-family:var(--fd);font-size:20px;font-weight:800';n.textContent='Marco Dominguez';
-  const m=document.createElement('div');m.style.cssText='font-size:12px;color:rgba(255,255,255,.38);margin-top:3px';m.textContent='Moniteur de conduite · HE-466-ZC';
+  const _monNom=curNom||localStorage.getItem('ap-nom')||'Marco Dominguez';
+  const _monData=MONS.find(x=>x.n===_monNom)||MONS[0]||{};
+  const n=document.createElement('div');n.style.cssText='font-family:var(--fd);font-size:20px;font-weight:800';n.textContent=_monNom;
+  const m=document.createElement('div');m.style.cssText='font-size:12px;color:rgba(255,255,255,.38);margin-top:3px';m.textContent='Moniteur de conduite'+(_monData.pl?' · '+_monData.pl:'');
   const tags=document.createElement('div');tags.style.cssText='display:flex;gap:6px;margin-top:9px;flex-wrap:wrap';
   ['✅ BEPECASER','🚗 BVM + BVA'].forEach(t=>{const s=document.createElement('span');s.className='bd bg';s.textContent=t;tags.appendChild(s);});
   info.appendChild(n);info.appendChild(m);info.appendChild(tags);ph.appendChild(avW);ph.appendChild(info);
 
   // Info (mail + tel + plaque seulement)
   const pi=document.getElementById('mon-prof-info');if(!pi)return;pi.innerHTML='';
-  const fields=[['Email','marco@autopilot.fr',true],['Téléphone','06 12 34 56 78',true],["Plaque d'immat.","HE-466-ZC",true],['BEPECASER (non modif.)','BP-2015-75012',false],['Type de boîte (non modif.)','BVM + BVA',false]];
+  const _monEmail=curEmail||localStorage.getItem('ap-email')||_monData.email||'marco@autopilot.fr';
+  const fields=[['Email',_monEmail,true],['Téléphone',_monData.tel||'—',true],["Plaque d'immat.",_monData.pl||'—',true],['BEPECASER (non modif.)','BP-2015-75012',false],['Type de boîte (non modif.)','BVM + BVA',false]];
   fields.forEach(([k,v,editable])=>{
     const r=document.createElement('div');r.style.cssText='display:flex;justify-content:space-between;align-items:center;padding:8px 0;border-bottom:1px solid var(--bo2)';
     const lk=document.createElement('span');lk.style.cssText='font-size:12px;color:var(--mu)';lk.textContent=k;
@@ -4261,12 +4365,14 @@ function renderProfilAdmin(){
   avE.appendChild(fInp);
   avW.appendChild(av);avW.appendChild(avE);
   const info=document.createElement('div');
-  const n=document.createElement('div');n.style.cssText='font-family:var(--fd);font-size:20px;font-weight:800';n.textContent='Sophie Laurent';
-  const m=document.createElement('div');m.style.cssText='font-size:12px;color:rgba(255,255,255,.38);margin-top:3px';m.textContent='Gérante · Auto-École du Centre';
+  const _adminNom=curNom||localStorage.getItem('ap-nom')||'Sophie Laurent';
+  const _adminEmail=curEmail||localStorage.getItem('ap-email')||'admin@autopilot.fr';
+  const n=document.createElement('div');n.style.cssText='font-family:var(--fd);font-size:20px;font-weight:800';n.textContent=_adminNom;
+  const m=document.createElement('div');m.style.cssText='font-size:12px;color:rgba(255,255,255,.38);margin-top:3px';m.textContent='Gérant(e) · Auto-École du Centre';
   info.appendChild(n);info.appendChild(m);ph.appendChild(avW);ph.appendChild(info);
 
   const pi=document.getElementById('admin-prof-info');if(!pi)return;pi.innerHTML='';
-  [['Email','sophie@autoecole-centre.fr'],['Téléphone','01 45 67 89 00'],['Siret','52436781200015']].forEach(([k,v])=>{
+  [['Email',_adminEmail],['Téléphone','01 45 67 89 00'],['Siret','52436781200015']].forEach(([k,v])=>{
     const r=document.createElement('div');r.style.cssText='display:flex;justify-content:space-between;align-items:center;padding:8px 0;border-bottom:1px solid var(--bo2)';
     const lk=document.createElement('span');lk.style.cssText='font-size:12px;color:var(--mu)';lk.textContent=k;
     const vk=document.createElement('span');vk.style.cssText='font-size:13px;font-weight:600';vk.textContent=v;
@@ -4341,12 +4447,16 @@ function renderProfilEleve(){
   avE.appendChild(fInp);
   avW.appendChild(av);avW.appendChild(avE);
   const info=document.createElement('div');
-  const n=document.createElement('div');n.style.cssText='font-family:var(--fd);font-size:20px;font-weight:800';n.textContent='Arnaud Kenfack';
-  const m=document.createElement('div');m.style.cssText='font-size:12px;color:rgba(255,255,255,.38);margin-top:3px';m.textContent='Élève · NEPH : 250759502656';
+  const _elvNom=curNom||localStorage.getItem('ap-nom')||'Arnaud Kenfack';
+  const n=document.createElement('div');n.style.cssText='font-family:var(--fd);font-size:20px;font-weight:800';n.textContent=_elvNom;
+  const _elvElv=ELEVES.find(e=>e.n===_elvNom);
+  const m=document.createElement('div');m.style.cssText='font-size:12px;color:rgba(255,255,255,.38);margin-top:3px';m.textContent='Élève'+(_elvElv?.neph?' · NEPH : '+_elvElv.neph:'');
   info.appendChild(n);info.appendChild(m);ph.appendChild(avW);ph.appendChild(info);
 
   const pi=document.getElementById('elv-prof-info');if(!pi)return;pi.innerHTML='';
-  [['Email','arnaud.kenfack@gmail.com',true],['Téléphone','07 62 42 40 70',true]].forEach(([k,v,e])=>{
+  const _elvEmail=curEmail||localStorage.getItem('ap-email')||(_elvElv?.email||'—');
+  const _elvTel=_elvElv?.tel||'—';
+  [['Email',_elvEmail,true],['Téléphone',_elvTel,true]].forEach(([k,v,e])=>{
     const r=document.createElement('div');r.style.cssText='display:flex;justify-content:space-between;align-items:center;padding:8px 0;border-bottom:1px solid var(--bo2)';
     const lk=document.createElement('span');lk.style.cssText='font-size:12px;color:var(--mu)';lk.textContent=k;
     const vk=document.createElement('div');vk.style.cssText='display:flex;align-items:center;gap:8px';
@@ -4447,8 +4557,8 @@ function renderNotifs(){
 /* v6.5 — Prochain cours élève en gros, lieu + tel cliquables */
 function renderElvNextLesson(){
   const el=document.getElementById('elv-next-lesson');if(!el)return;
-  // Cherche la prochaine leçon de l'élève (Arnaud Kenfack en démo) dans EVENTS
-  const myName='Arnaud Kenfack';
+  // Cherche la prochaine leçon de l'élève connecté dans EVENTS
+  const myName=curNom||localStorage.getItem('ap-nom')||'Arnaud Kenfack';
   const upcoming=EVENTS.filter(e=>e.n===myName&&(e.t==='conf'||e.t==='pend')).sort((a,b)=>{
     const da=(a.d||0)*1000+parseInt(a.h);const db=(b.d||0)*1000+parseInt(b.h);return da-db;
   });
@@ -4469,7 +4579,7 @@ function renderElvNextLesson(){
       ${isPending?'<span style="background:#fef3c7;color:#92400E;font-size:10px;font-weight:700;padding:3px 8px;border-radius:4px">⏳ En attente confirmation moniteur</span>':'<span style="background:#d1fae5;color:#065F46;font-size:10px;font-weight:700;padding:3px 8px;border-radius:4px">✅ Confirmée</span>'}
     </div>
     <div style="font-family:var(--fd);font-size:clamp(17px,4vw,22px);font-weight:800;line-height:1.2">${dn} ${dd} ${dM} · ${ev.h}</div>
-    <div style="font-size:13px;color:rgba(255,255,255,.78);margin-top:4px">avec <b>Marco Dominguez</b> · ${ev.dur||1}h</div>
+    <div style="font-size:13px;color:rgba(255,255,255,.78);margin-top:4px">avec <b>${esc(ev.mon_nom||'votre moniteur')}</b> · ${ev.dur||1}h</div>
     <div style="display:flex;gap:6px;margin-top:10px;flex-wrap:wrap">
       <a href="https://maps.google.com/?q=${encodeURIComponent(lieu?.a||'Paris')}" target="_blank" rel="noopener" style="flex:1;min-width:120px;background:rgba(255,255,255,.15);color:#fff;padding:7px 10px;border-radius:7px;text-decoration:none;font-size:12px;font-weight:600;text-align:center" aria-label="Itinéraire vers ${esc(lieu?.n||'')}">📍 ${esc(lieu?.n||'Lieu')}</a>
       <a href="tel:${monTel}" style="background:rgba(255,255,255,.15);color:#fff;padding:7px 12px;border-radius:7px;text-decoration:none;font-size:12px;font-weight:700" aria-label="Appeler le moniteur">📞 Appeler</a>
@@ -4481,8 +4591,8 @@ function renderEspaceEleve(){
   // v6.5 — Carte "Prochain cours" : remplit le bloc bleu visible du hero
   renderElvNextLesson();
   const w=document.getElementById('elv-cours');if(!w)return;w.innerHTML='';
-  // Prochains cours dynamiques depuis EVENTS (Arnaud Kenfack, conf ou pend)
-  const myName='Arnaud Kenfack';
+  // Prochains cours dynamiques depuis EVENTS (élève connecté)
+  const myName=curNom||localStorage.getItem('ap-nom')||'Arnaud Kenfack';
   const wDates=getWeekDates(0);
   const upcoming=EVENTS.filter(e=>e.n===myName&&(e.t==='conf'||e.t==='pend'))
     .sort((a,b)=>(a.d*1000+parseInt(a.h))-(b.d*1000+parseInt(b.h)));
@@ -4490,7 +4600,7 @@ function renderEspaceEleve(){
     const dateObj=wDates[e.d-1]||new Date();
     return {ev:e,d:String(dateObj.getDate()),m:MONTHS_FR_SHORT[dateObj.getMonth()],
       h:e.h+' – '+(()=>{const[hh,mm]=e.h.split(':').map(Number);const ef=hh*60+(mm||0)+(e.dur||1)*60;return String(Math.floor(ef/60)).padStart(2,'0')+':'+(ef%60===0?'00':String(ef%60).padStart(2,'0'));})(),
-      mon:'Marco Dominguez',lieu:(LIEUX_DATA[0]?.n||'Lieu'),dur:(e.dur||1)+'h',s:e.t};
+      mon:e.mon_nom||'votre moniteur',lieu:(LIEUX_DATA[0]?.n||'Lieu'),dur:(e.dur||1)+'h',s:e.t};
   });
   if(!COURS.length){
     const empty=document.createElement('div');
@@ -5014,7 +5124,7 @@ function bind(){
   function openAddMonModal(){
     tx('m-add-mon-title','👨‍🏫 Ajouter un moniteur');
     document.getElementById('mon-edit-idx').value=-1;
-    ['mon-f-nom','mon-f-tel','mon-f-email','mon-f-pl'].forEach(id=>{const el=document.getElementById(id);if(el)el.value='';});
+    ['mon-f-nom','mon-f-tel','mon-f-email','mon-f-pl','mon-f-pwd'].forEach(id=>{const el=document.getElementById(id);if(el)el.value='';});
     document.getElementById('mon-f-max').value=35;
     openM('m-add-mon');
   }
@@ -5022,24 +5132,38 @@ function bind(){
   document.getElementById('btn-add-mon-open2')?.addEventListener('click',openAddMonModal);
 
   // Sauvegarder moniteur (add ou edit)
-  document.getElementById('btn-save-mon')?.addEventListener('click',()=>{
+  document.getElementById('btn-save-mon')?.addEventListener('click',async()=>{
+    const btn=document.getElementById('btn-save-mon');if(btn)btn.disabled=true;
     const nom=(document.getElementById('mon-f-nom')?.value||'').trim();
-    if(!nom){toast('⚠️ Le nom est obligatoire');return;}
+    if(!nom){toast('⚠️ Le nom est obligatoire');if(btn)btn.disabled=false;return;}
+    const email=(document.getElementById('mon-f-email')?.value||'').trim();
+    const pwd=(document.getElementById('mon-f-pwd')?.value||'').trim();
     const obj={
-      n:nom,
-      e:'🧑',
+      n:nom, e:'🧑',
       tel:document.getElementById('mon-f-tel')?.value||'',
-      email:document.getElementById('mon-f-email')?.value||'',
-      h:0,
-      max:parseFloat(document.getElementById('mon-f-max')?.value)||35,
-      el:0,
-      pl:document.getElementById('mon-f-pl')?.value||'',
-      tx:80,
-      note:4.0,
+      email:email,
+      h:0,max:parseFloat(document.getElementById('mon-f-max')?.value)||35,
+      el:0,pl:document.getElementById('mon-f-pl')?.value||'',tx:80,note:4.0,
     };
     const idx=parseInt(document.getElementById('mon-edit-idx')?.value);
-    if(idx>=0){editMon(idx,obj);toast('✅ Moniteur modifié : '+obj.n);}
-    else{addMon(obj);toast('✅ Moniteur ajouté : '+obj.n);}
+    if(idx>=0){editMon(idx,obj);}else{addMon(obj);}
+    // Créer compte Supabase Auth si email+password fournis
+    if(sb&&email&&pwd.length>=8&&idx<0){
+      const localIdx=MONS.length-1;
+      try{
+        // Sauvegarder session admin avant signUp (signUp change la session active)
+        const{data:{session:adminSess}}=await sb.auth.getSession();
+        const{data:au,error:ae}=await sb.auth.signUp({email,password:pwd,options:{data:{nom}}});
+        // Restaurer session admin immédiatement
+        if(adminSess)await sb.auth.setSession({access_token:adminSess.access_token,refresh_token:adminSess.refresh_token});
+        if(!ae&&au?.user){
+          await sb.from('profiles').update({auth_id:au.user.id}).eq('id',MONS[localIdx]._id||'');
+          toast('✅ Moniteur ajouté : '+nom+' — compte de connexion créé');
+        } else {toast('✅ Moniteur ajouté : '+nom+' ('+( ae?.message||'email déjà utilisé')+')');}
+      }catch(e){toast('✅ Moniteur ajouté : '+nom);}
+    } else {toast(idx>=0?'✅ Moniteur modifié : '+nom:'✅ Moniteur ajouté : '+nom);}
+    if(btn)btn.disabled=false;
+    if(document.getElementById('mon-f-pwd'))document.getElementById('mon-f-pwd').value='';
     closeM('m-add-mon');populateMonSelect();renderAdmin();
     if(curPage==='cal-admin')renderCalAdmin();
   });
@@ -5056,26 +5180,41 @@ function bind(){
   });
 
   // Sauvegarder élève (add ou edit)
-  document.getElementById('btn-save-elv')?.addEventListener('click',()=>{
+  document.getElementById('btn-save-elv')?.addEventListener('click',async()=>{
+    const btn=document.getElementById('btn-save-elv');if(btn)btn.disabled=true;
     const prenom=(document.getElementById('elv-f-prenom')?.value||'').trim();
     const nom=(document.getElementById('elv-f-nom')?.value||'').trim();
-    if(!prenom||!nom){toast('⚠️ Prénom et nom obligatoires');return;}
+    if(!prenom||!nom){toast('⚠️ Prénom et nom obligatoires');if(btn)btn.disabled=false;return;}
+    const email=(document.getElementById('elv-f-email')?.value||'').trim();
+    const pwd=(document.getElementById('elv-f-pwd')?.value||'').trim();
     const obj={
-      n:prenom+' '+nom,
-      e:'🧑',
-      h:0,
-      f:parseFloat(document.getElementById('elv-f-f')?.value)||20,
+      n:prenom+' '+nom, e:'🧑',
+      h:0, f:parseFloat(document.getElementById('elv-f-f')?.value)||20,
       d:'récent',
       s:document.getElementById('elv-f-s')?.value||'Actif',
       code:document.getElementById('elv-f-code')?.value||'En cours',
       tel:document.getElementById('elv-f-tel')?.value||'',
-      email:document.getElementById('elv-f-email')?.value||'',
+      email:email,
       neph:document.getElementById('elv-f-neph')?.value||'',
       dob:document.getElementById('elv-f-dob')?.value||'',
     };
     const idx=parseInt(document.getElementById('elv-edit-idx')?.value);
-    if(idx>=0){editEleve(idx,obj);toast('✅ Élève modifié : '+obj.n);}
-    else{addEleve(obj);toast('✅ Élève ajouté : '+obj.n);}
+    if(idx>=0){editEleve(idx,obj);}else{addEleve(obj);}
+    // Créer compte Supabase Auth si email+password fournis
+    if(sb&&email&&pwd.length>=8&&idx<0){
+      const localIdx=ELEVES.length-1;
+      try{
+        const{data:{session:adminSess}}=await sb.auth.getSession();
+        const{data:au,error:ae}=await sb.auth.signUp({email,password:pwd,options:{data:{nom:obj.n}}});
+        if(adminSess)await sb.auth.setSession({access_token:adminSess.access_token,refresh_token:adminSess.refresh_token});
+        if(!ae&&au?.user){
+          await sb.from('profiles').update({auth_id:au.user.id}).eq('id',ELEVES[localIdx]._id||'');
+          toast('✅ Élève ajouté : '+obj.n+' — compte de connexion créé');
+        } else {toast('✅ Élève ajouté : '+obj.n+' ('+(ae?.message||'email déjà utilisé')+')');}
+      }catch(e){toast('✅ Élève ajouté : '+obj.n);}
+    } else {toast(idx>=0?'✅ Élève modifié : '+obj.n:'✅ Élève ajouté : '+obj.n);}
+    if(btn)btn.disabled=false;
+    if(document.getElementById('elv-f-pwd'))document.getElementById('elv-f-pwd').value='';
     closeM('m-add-elv');renderAdmin();renderEleves(ELEVES);
   });
 
@@ -5264,15 +5403,20 @@ function buildSplash(){
     if(sb){
       const{data,error}=await sb.auth.signInWithPassword({email,password:pwd});
       if(error){err.textContent='Email ou mot de passe incorrect';err.classList.add('on');btn.disabled=false;btn.textContent='Se connecter';return;}
-      const{data:profile}=await sb.from('profiles').select('role,id').eq('auth_id',data.user.id).single();
+      const{data:profile}=await sb.from('profiles').select('role,id,nom,email').eq('auth_id',data.user.id).single();
       const role=profile?.role||'moniteur';
       currentProfileId=profile?.id||null;
-      try{localStorage.setItem('ap-role',role);localStorage.setItem('ap-email',email);}catch(_){}
+      const nom=profile?.nom||null;
+      const profEmail=profile?.email||email;
+      if(nom){curNom=nom;curEmail=profEmail;}
+      try{localStorage.setItem('ap-role',role);localStorage.setItem('ap-email',profEmail);if(nom)localStorage.setItem('ap-nom',nom);}catch(_){}
       btn.disabled=false;btn.textContent='Se connecter';
-      hideAuth();switchRole(role);toast('👋 Bonjour !');
+      hideAuth();switchRole(role);
+      if(nom&&role==='eleve')applyElvName(nom,profEmail);
+      toast('👋 Bonjour'+(nom?' '+nom.split(' ')[0]:'')+' !');
       // Charger données profil-spécifiques après login
       if(currentProfileId){
-        if(role==='eleve')loadREMCFromDB(currentProfileId).then(()=>{renderCompGrid();updateLivretStats();});
+        if(role==='eleve')loadREMCFromDB(currentProfileId).then(()=>{renderCompGrid();updateLivretStats();renderEspaceEleve();});
         if(role==='moniteur'){loadLieuxFromDB(currentProfileId).then(()=>buildLieux());loadNotesPrivFromDB(currentProfileId);}
         loadNotationsFromDB();
       }
@@ -5385,10 +5529,15 @@ function init(){
       // Vérifier session Supabase (si l'utilisateur était déjà connecté)
       const{data:{session}}=await sb.auth.getSession();
       if(session){
-        const{data:profile}=await sb.from('profiles').select('role,id').eq('auth_id',session.user.id).single();
+        const{data:profile}=await sb.from('profiles').select('role,id,nom,email').eq('auth_id',session.user.id).single();
         if(profile){
           const role=profile.role;
           currentProfileId=profile.id;
+          const nom=profile.nom||null;
+          const profEmail=profile.email||session.user.email||null;
+          if(nom){curNom=nom;curEmail=profEmail;}
+          if(nom)try{localStorage.setItem('ap-nom',nom);}catch(_){}
+          if(nom&&role==='eleve')applyElvName(nom,profEmail);
           if(localStorage.getItem('ap-role')!==role){
             localStorage.setItem('ap-role',role);splashRole=role;hideAuth();switchRole(role);
           }
