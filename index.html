@@ -6487,7 +6487,10 @@ function buildSplash(){
     if(pwd.length<4){err.textContent='Mot de passe trop court';err.classList.add('on');return;}
     const btn=document.getElementById('btn-login');btn.disabled=true;btn.textContent='Connexion…';
     if(sb){
-      const{data,error}=await sb.auth.signInWithPassword({email,password:pwd});
+      toast('🔄 Étape 1 — Connexion Supabase…');
+      let authResult;
+      try{authResult=await sb.auth.signInWithPassword({email,password:pwd});}catch(ex){err.textContent='❌ Exception auth: '+ex.message;err.classList.add('on');btn.disabled=false;btn.textContent='Se connecter';return;}
+      const{data,error}=authResult;
       if(error){
         const msg=error.message||'';
         const code=error.status||error.code||'';
@@ -6500,15 +6503,20 @@ function buildSplash(){
         }
         err.classList.add('on');btn.disabled=false;btn.textContent='Se connecter';return;
       }
-      const{data:profile,error:profErr}=await sb.from('profiles').select('role,id,nom,email').eq('auth_id',data.user.id).maybeSingle();
+      toast('✅ Étape 2 — Auth OK, récup profil…');
+      let profResult;
+      try{profResult=await sb.from('profiles').select('role,id,nom,email').eq('auth_id',data.user.id).maybeSingle();}
+      catch(ex){err.textContent='❌ Exception profil: '+ex.message;err.classList.add('on');btn.disabled=false;btn.textContent='Se connecter';await sb.auth.signOut();return;}
+      const{data:profile,error:profErr}=profResult;
       if(!profile){
         const pCode=profErr?.code||profErr?.status||'';
         const pMsg=profErr?.message||'aucune ligne retournée';
-        err.textContent='⚠️ Auth OK mais profil introuvable ['+pCode+']: '+pMsg+' — auth_id: '+data.user.id.slice(0,8)+'…';
+        err.textContent='⚠️ Auth OK — profil introuvable ['+pCode+']: '+pMsg;
         console.error('[LOGIN] profil introuvable auth_id=',data.user.id,'profErr=',profErr);
         err.classList.add('on');btn.disabled=false;btn.textContent='Se connecter';
         await sb.auth.signOut();return;
       }
+      toast('✅ Étape 3 — Profil trouvé: '+profile.role);
       const role=profile.role||'moniteur';
       currentProfileId=profile.id||null;
       const nom=profile.nom||null;
