@@ -6490,20 +6490,22 @@ function buildSplash(){
       const{data,error}=await sb.auth.signInWithPassword({email,password:pwd});
       if(error){
         const msg=error.message||'';
+        const code=error.status||error.code||'';
         if(msg.toLowerCase().includes('confirm')||msg.toLowerCase().includes('not confirmed')){
-          err.textContent='Email non confirmé — vérifiez votre boîte mail ou contactez l\'admin.';
+          err.textContent='❌ Email non confirmé — allez dans votre boîte mail et cliquez le lien de confirmation.';
         } else if(msg.toLowerCase().includes('invalid')||msg.toLowerCase().includes('credentials')){
-          err.textContent='Email ou mot de passe incorrect.';
+          err.textContent='❌ Email ou mot de passe incorrect.';
         } else {
-          err.textContent=msg||'Erreur de connexion.';
+          err.textContent='❌ Erreur auth ['+code+']: '+msg;
         }
         err.classList.add('on');btn.disabled=false;btn.textContent='Se connecter';return;
       }
       const{data:profile,error:profErr}=await sb.from('profiles').select('role,id,nom,email').eq('auth_id',data.user.id).maybeSingle();
       if(!profile){
-        const pErr=profErr?.message||'profil introuvable — contactez l\'admin';
-        err.textContent='Compte incomplet — '+pErr;
-        console.error('[LOGIN] profil non trouvé pour auth_id=',data.user.id,'erreur:',profErr);
+        const pCode=profErr?.code||profErr?.status||'';
+        const pMsg=profErr?.message||'aucune ligne retournée';
+        err.textContent='⚠️ Auth OK mais profil introuvable ['+pCode+']: '+pMsg+' — auth_id: '+data.user.id.slice(0,8)+'…';
+        console.error('[LOGIN] profil introuvable auth_id=',data.user.id,'profErr=',profErr);
         err.classList.add('on');btn.disabled=false;btn.textContent='Se connecter';
         await sb.auth.signOut();return;
       }
