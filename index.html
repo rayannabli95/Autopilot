@@ -1862,10 +1862,9 @@ async function loadElevesFromDB(){
 }
 async function loadEventsFromDB(){
   if(!sb)return;
-  const{data,error}=await sb.from('events').select('*').neq('is_deleted',true);
+  const{data,error}=await sb.from('events').select('*');
   if(error){console.warn('[DB] loadEventsFromDB error:',error.message);return;}
-  // Ne remplacer EVENTS qu'après confirmation du succès — jamais vider avant
-  const fetched=data?data.map(e=>({h:e.h,d:e.d,n:e.n,t:e.t,dur:e.dur||1,comment:e.comment,lieu:e.lieu,mon_nom:e.mon_nom,_id:e.id})):[];
+  const fetched=(data||[]).filter(e=>e.is_deleted!==true).map(e=>({h:e.h,d:e.d,n:e.n,t:e.t,dur:e.dur||1,comment:e.comment,lieu:e.lieu,mon_nom:e.mon_nom,_id:e.id}));
   EVENTS=fetched;
   STORE.set('ap-events',EVENTS);
 }
@@ -2102,12 +2101,18 @@ async function loadAbsencesFromDB(){
   if(!sb)return;
   try{
     const{data,error}=await sb.from('absences')
-      .select('id,moniteur_id,date_abs,duree_h,motif,created_at,profiles!absences_moniteur_id_fkey(nom)')
+      .select('id,moniteur_id,date_abs,duree_h,motif,created_at')
       .order('created_at',{ascending:false}).limit(300);
     if(error)throw error;
     if(!data?.length)return;
+    const monIds=[...new Set(data.map(r=>r.moniteur_id).filter(Boolean))];
+    let monNames={};
+    if(monIds.length){
+      const{data:profs}=await sb.from('profiles').select('id,nom').in('id',monIds);
+      if(profs)profs.forEach(p=>{monNames[p.id]=p.nom;});
+    }
     const mapped=data.map(r=>({
-      mon:r.profiles?.nom||'',
+      mon:monNames[r.moniteur_id]||'',
       motif:r.motif||'',date:r.date_abs||'',h:'',
       dur:r.duree_h||1,eleve:'',replaced:false,note:r.motif||'',_id:r.id
     })).filter(r=>r.mon);
@@ -6494,9 +6499,11 @@ function buildSplash(){
         }
         err.classList.add('on');btn.disabled=false;btn.textContent='Se connecter';return;
       }
-      const{data:profile,error:profErr}=await sb.from('profiles').select('role,id,nom,email').eq('auth_id',data.user.id).single();
+      const{data:profile,error:profErr}=await sb.from('profiles').select('role,id,nom,email').eq('auth_id',data.user.id).maybeSingle();
       if(!profile){
-        err.textContent='Compte incomplet — '+(profErr?.message||'profil introuvable');
+        const pErr=profErr?.message||'profil introuvable — contactez l\'admin';
+        err.textContent='Compte incomplet — '+pErr;
+        console.error('[LOGIN] profil non trouvé pour auth_id=',data.user.id,'erreur:',profErr);
         err.classList.add('on');btn.disabled=false;btn.textContent='Se connecter';
         await sb.auth.signOut();return;
       }
@@ -6711,7 +6718,7 @@ function init(){
         showAuth();return;
       }
       if(session){
-        const{data:profile}=await sb.from('profiles').select('role,id,nom,email').eq('auth_id',session.user.id).single();
+        const{data:profile}=await sb.from('profiles').select('role,id,nom,email').eq('auth_id',session.user.id).maybeSingle();
         if(profile){
           const role=profile.role;
           currentProfileId=profile.id;
