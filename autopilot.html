@@ -832,17 +832,17 @@ body.dark .cal-cell{border-left-color:rgba(255,255,255,.03);}
         <div class="auth-sub" id="auth-sub">Connectez-vous à votre espace</div>
 
         <!-- ── LOGIN FORM ── -->
-        <form id="form-login" class="auth-form on">
+        <form id="form-login" class="auth-form on" onsubmit="return false;">
           <div class="auth-fg">
             <label class="auth-lb">Email</label>
-            <input type="email" class="auth-in" id="login-email" placeholder="vous@exemple.fr" autocomplete="email" required aria-label="Adresse email">
+            <input type="email" class="auth-in" id="login-email" placeholder="vous@exemple.fr" autocomplete="email" aria-label="Adresse email">
           </div>
           <div class="auth-fg">
             <label class="auth-lb">Mot de passe</label>
-            <input type="password" class="auth-in" id="login-pwd" placeholder="••••••••" autocomplete="current-password" required aria-label="Mot de passe">
+            <input type="password" class="auth-in" id="login-pwd" placeholder="••••••••" autocomplete="current-password" aria-label="Mot de passe">
           </div>
           <div class="auth-err" id="login-err"></div>
-          <button type="submit" class="auth-btn" id="btn-login">Se connecter</button>
+          <button type="button" class="auth-btn" id="btn-login" onclick="doLogin()">Se connecter</button>
           <div class="auth-link-row">
             <a href="#" class="auth-link" id="link-forgot">Mot de passe oublié ?</a>
           </div>
@@ -6829,6 +6829,66 @@ function _applyDemoUI(){
 
 document.addEventListener('DOMContentLoaded',()=>{_updateOfflineBanner();_applyDemoUI();});
 document.addEventListener('DOMContentLoaded',init);
+
+async function doLogin(){
+  const email=(document.getElementById('login-email')?.value||'').trim().toLowerCase();
+  const pwd=document.getElementById('login-pwd')?.value||'';
+  const err=document.getElementById('login-err');
+  const btn=document.getElementById('btn-login');
+  if(err)err.classList.remove('on');
+  if(!email||!email.includes('@')){if(err){err.textContent='Email invalide';err.classList.add('on');}return;}
+  if(pwd.length<4){if(err){err.textContent='Mot de passe trop court';err.classList.add('on');}return;}
+  if(btn){btn.disabled=true;btn.textContent='Connexion…';}
+  if(!sb){
+    if(err){err.textContent='⚠️ Supabase non configuré';err.classList.add('on');}
+    if(btn){btn.disabled=false;btn.textContent='Se connecter';}
+    return;
+  }
+  try{
+    const{data,error}=await sb.auth.signInWithPassword({email,password:pwd});
+    if(error){
+      if(err){err.textContent='❌ '+error.message;err.classList.add('on');}
+      if(btn){btn.disabled=false;btn.textContent='Se connecter';}
+      return;
+    }
+    const{data:profile,error:pErr}=await sb.from('profiles').select('role,id,nom,email').eq('auth_id',data.user.id).maybeSingle();
+    if(!profile){
+      if(err){err.textContent='⚠️ Profil introuvable — contacter l\'admin';err.classList.add('on');}
+      if(btn){btn.disabled=false;btn.textContent='Se connecter';}
+      await sb.auth.signOut();return;
+    }
+    const role=profile.role||'moniteur';
+    currentProfileId=profile.id||null;
+    const nom=profile.nom||null;
+    const profEmail=profile.email||email;
+    if(nom){curNom=nom;curEmail=profEmail;}
+    try{localStorage.setItem('ap-role',role);localStorage.setItem('ap-email',profEmail);if(nom)localStorage.setItem('ap-nom',nom);}catch(_){}
+    EVENTS=[];
+    if(btn){btn.disabled=false;btn.textContent='Se connecter';}
+    applyDemoBadge(false);
+    hideAuth();switchRole(role);
+    if(nom&&role==='eleve')applyElvName(nom,profEmail);
+    if(nom&&(role==='moniteur'||role==='admin'))applyMonName(nom,profEmail);
+    toast('Bonjour'+(nom?' '+nom.split(' ')[0]:'')+' !');
+    if(currentProfileId){
+      if(role==='admin'){
+        ANNULATIONS=[];EVENTS=[];NOTATIONS=[];
+        Promise.all([loadMonsFromDB(),loadElevesFromDB(),loadEventsFromDB(),loadNotationsFromDB(),loadAbsencesFromDB()]).then(()=>{renderAdmin();buildCalendar('cal-head','cal-body',acalOff);});
+      }
+      if(role==='moniteur'){
+        loadEventsFromDB().then(()=>{renderSbNav();buildCalendar('cal-head','cal-body',calOff);renderToday();});
+        loadLieuxFromDB(currentProfileId).then(()=>buildLieux());
+      }
+      if(role==='eleve'){
+        Promise.all([loadEventsFromDB(),loadREMCFromDB(currentProfileId)]).then(()=>{renderCompGrid();updateLivretStats();renderEspaceEleve();});
+      }
+      loadNotationsFromDB();loadNotifsFromDB();
+    }
+  }catch(ex){
+    if(err){err.textContent='❌ Erreur: '+ex.message;err.classList.add('on');}
+    if(btn){btn.disabled=false;btn.textContent='Se connecter';}
+  }
+}
 </script>
 </body>
 </html>
