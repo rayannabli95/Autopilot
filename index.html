@@ -2160,7 +2160,8 @@ async function uploadPhotoToStorage(file,bucketKey){
     const{data:{publicUrl}}=sb.storage.from('profile-photos').getPublicUrl(path);
     return publicUrl;
   }catch(e){console.warn('[Storage] uploadPhotoToStorage:',e);return null;}
-}sync function syncREMCToDB(eleveId,monId){
+}
+async function syncREMCToDB(eleveId,monId){
   if(!sb||!eleveId)return;
   try{
     const rows=Object.entries(CS).map(([comp_id,val])=>({eleve_id:eleveId,...(monId?{moniteur_id:monId}:{}),comp_id,checked:val.on||false,lv:val.lv||null}));
