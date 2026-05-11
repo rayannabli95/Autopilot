@@ -2,7 +2,16 @@
 <html lang="fr">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1">
+<script>
+window.onerror=function(msg,src,line,col,err){
+  var box=document.getElementById('_errbox');
+  if(!box){box=document.createElement('div');box.id='_errbox';box.style.cssText='position:fixed;top:0;left:0;right:0;z-index:99999;background:#b91c1c;color:#fff;font-family:monospace;font-size:14px;padding:16px;white-space:pre-wrap;';document.body?document.body.appendChild(box):document.addEventListener('DOMContentLoaded',function(){document.body.appendChild(box);});}
+  box.textContent='❌ ERREUR JS ligne '+line+':\n'+msg+'\n\nFichier: '+src;
+  return false;
+};
+</script>
+<!-- FIX BUG-09 (a11y WCAG 2.1 SC 1.4.4) : retiré maximum-scale=1 + ajouté viewport-fit pour safe-area iOS -->
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; img-src 'self' data: blob:; connect-src 'self' https://*.supabase.co wss://*.supabase.co; frame-ancestors 'none'; base-uri 'self'; form-action 'self';">
 <meta name="referrer" content="strict-origin-when-cross-origin">
 <title>Autopilot v6</title>
@@ -90,6 +99,10 @@ body.dark .fi,body.dark .fsel{background:var(--su2);color:var(--ink);border-colo
 *,*::before,*::after{box-sizing:border-box;margin:0;padding:0;}
 html{font-size:14px;-webkit-text-size-adjust:100%;}
 body{font-family:var(--fb);background:var(--bg);color:var(--ink);min-height:100vh;-webkit-font-smoothing:antialiased;transition:background .35s ease,color .35s ease;}
+/* FIX BUG-10 : safe-area iOS (notch + home bar). Modifiable : ajuster pour exclure côtés si besoin */
+@supports(padding:env(safe-area-inset-top)){
+  body{padding-top:env(safe-area-inset-top);padding-bottom:env(safe-area-inset-bottom);}
+}
 button,input,select,textarea{font-family:var(--fb);}
 * {transition:background-color .2s ease, color .2s ease, border-color .2s ease, box-shadow .2s ease, transform .12s ease;}
 
@@ -824,17 +837,17 @@ body.dark .cal-cell{border-left-color:rgba(255,255,255,.03);}
         <div class="auth-sub" id="auth-sub">Connectez-vous à votre espace</div>
 
         <!-- ── LOGIN FORM ── -->
-        <form id="form-login" class="auth-form on">
+        <form id="form-login" class="auth-form on" onsubmit="return false;">
           <div class="auth-fg">
             <label class="auth-lb">Email</label>
-            <input type="email" class="auth-in" id="login-email" placeholder="vous@exemple.fr" autocomplete="email" required aria-label="Adresse email">
+            <input type="email" class="auth-in" id="login-email" placeholder="vous@exemple.fr" autocomplete="email" aria-label="Adresse email">
           </div>
           <div class="auth-fg">
             <label class="auth-lb">Mot de passe</label>
-            <input type="password" class="auth-in" id="login-pwd" placeholder="••••••••" autocomplete="current-password" required aria-label="Mot de passe">
+            <input type="password" class="auth-in" id="login-pwd" placeholder="••••••••" autocomplete="current-password" aria-label="Mot de passe">
           </div>
           <div class="auth-err" id="login-err"></div>
-          <button type="submit" class="auth-btn" id="btn-login">Se connecter</button>
+          <button type="button" class="auth-btn" id="btn-login" onclick="doLogin()">Se connecter</button>
           <div class="auth-link-row">
             <a href="#" class="auth-link" id="link-forgot">Mot de passe oublié ?</a>
           </div>
@@ -1839,6 +1852,23 @@ const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZ
 const SB_READY = SUPABASE_URL !== 'REMPLACE_MOI' && typeof supabase !== 'undefined';
 const sb = SB_READY ? supabase.createClient(SUPABASE_URL, SUPABASE_KEY) : null;
 
+// FIX BUG-05 : synchronise l'état d'auth (logout sur autre onglet, refresh token, expiration session).
+// Modifiable : ajoute des cas dans le switch pour gérer USER_UPDATED, MFA_CHALLENGE_VERIFIED, etc.
+if(sb){
+  sb.auth.onAuthStateChange(function(event, session){
+    try{
+      if(event==='SIGNED_OUT' || (!session && event!=='INITIAL_SESSION')){
+        try{localStorage.removeItem('ap-role');localStorage.removeItem('ap-nom');localStorage.removeItem('ap-email');}catch(_){}
+        if(typeof setCurUser==='function')setCurUser(null);
+        // Re-display login UI
+        if(typeof showAuth==='function')showAuth();
+        else location.reload();
+      }
+      // TOKEN_REFRESHED : rien à faire, supabase-js gère seul. Log pour debug si besoin.
+    }catch(e){console.warn('[auth] onAuthStateChange handler:',e);}
+  });
+}
+
 async function loadMonsFromDB(){
   if(!sb)return;
   // Vider les mock AVANT la requête — une session réelle ne doit jamais voir de données mock
@@ -1988,10 +2018,20 @@ function setupRealtime(){
 }
 
 // ── État profil connecté ──
+// FIX BUG-02 : window.CUR_USER est un alias unique vers le profil actif.
+// Toutes les anciennes références à CUR_USER doivent passer par CUR_USER (sans var/let).
+// Mise à jour automatique : appeler setCurUser(profile) après login OU à tout changement.
 let currentProfileId=null;
 let currentFicheEleveId=null;
 let curNom=null;
 let curEmail=null;
+// NB : curRole est déclaré plus bas (~l. 2766) car il existait déjà — on ne le redéclare pas ici.
+window.CUR_USER=null; // toujours défini pour éviter ReferenceError
+function setCurUser(p){
+  window.CUR_USER = p ? {id:p.id||null, nom:p.nom||null, email:p.email||null, role:p.role||null, _profile:p} : null;
+  if(p){currentProfileId=p.id||null; curNom=p.nom||null; curEmail=p.email||null; if(typeof curRole!=='undefined')curRole=p.role||null;}
+  else  {currentProfileId=null; curNom=null; curEmail=null; if(typeof curRole!=='undefined')curRole=null;}
+}
 function applyElvName(nom,email){
   curNom=nom;if(email)curEmail=email;
   const g=document.getElementById('elv-greeting');if(g)g.textContent=nom.split(' ')[0]+' 👋';
@@ -3449,8 +3489,10 @@ const AGENTS={
       const CAT_LABELS={C1:'Maîtrise du véhicule',C2:'Perception / anticipation',C3:'Conduite en situations complexes',C4:'Comportements responsables'};
       const catDone={};const catTotal={};
       REMC.forEach(cat=>{
+        // FIX BUG-03 : garde contre cat ou cat.c undefined (évite TypeError reading 'slice')
+        if(!cat||!cat.c||!Array.isArray(cat.subs))return;
         const key=cat.c.slice(0,2);catTotal[key]=(catTotal[key]||0)+cat.subs.length;
-        cat.subs.forEach(s=>{if(CS[s.c]?.lv==='v')catDone[key]=(catDone[key]||0)+1;});
+        cat.subs.forEach(s=>{if(s&&s.c&&CS[s.c]?.lv==='v')catDone[key]=(catDone[key]||0)+1;});
       });
       const weakCats=Object.keys(catTotal).filter(k=>(catDone[k]||0)/catTotal[k]<0.5).map(k=>CAT_LABELS[k]).filter(Boolean);
       // Forfait restant
@@ -4726,7 +4768,8 @@ function buildHistTbl(){
   const TYPE_LABELS={conf:'Leçon',lecon:'Leçon',pend:'Leçon',perso:'RDV Perso',absence:'Absence',abs:'Absence',dispo:'Dispo'};
   const rows=evtsFiche.map(e=>{
     const dayDate=wDates[e.d-1];
-    const dt=dayDate?WEEK_DAYS[dayDate.getDay()-1||6]+' '+dayDate.getDate()+' '+MONTHS_FR_SHORT[dayDate.getMonth()]:'Cette semaine';
+    // FIX BUG-06 : ancien `getDay()-1||6` faisait Lun→0→0||6→Dim. Correct : (jour+6)%7 mappe 0=Dim→6, 1=Lun→0, 2=Mar→1...
+    const dt=dayDate?WEEK_DAYS[(dayDate.getDay()+6)%7]+' '+dayDate.getDate()+' '+MONTHS_FR_SHORT[dayDate.getMonth()]:'Cette semaine';
     const statClass=e.t==='pend'?'bam':e.t==='conf'||e.t==='lecon'?'bg':'br';
     const statTxt=e.t==='pend'?'En attente':e.t==='conf'||e.t==='lecon'?'Confirmée':'Annulée';
     const typeTxt=TYPE_LABELS[e.t]||e.t||'—';
@@ -5495,7 +5538,8 @@ function renderEspaceEleve(){
   // Update greeting initials avatar
   const elvNom=myName;const elvInitials=elvNom.split(' ').slice(0,2).map(w=>w[0]||'').join('').toUpperCase()||'E';
   const elvPhoto=STORE.get('ap-elv-photo');
-  const elvAv=document.getElementById('elv-av-top');if(elvAv)elvAv.innerHTML=elvPhoto?`<img src="${elvPhoto}" alt="photo">`:`${elvInitials}`;
+  // FIX BUG-04 XSS : esc() sur elvPhoto et elvInitials (sources possibles : DB ou localStorage)
+  const elvAv=document.getElementById('elv-av-top');if(elvAv){if(elvPhoto){const _img=document.createElement('img');_img.src=elvPhoto;_img.alt='photo';elvAv.replaceChildren(_img);}else{elvAv.textContent=String(elvInitials||'');}}
   const elvGreet=document.getElementById('elv-greeting');if(elvGreet)elvGreet.textContent=elvNom.split(' ')[0]+' 👋';
   const wDates=getWeekDates(0);
   const upcoming=EVENTS.filter(e=>e.n===myName&&(e.t==='conf'||e.t==='pend'))
@@ -6479,7 +6523,7 @@ function buildSplash(){
   // Login submit
   document.getElementById('form-login')?.addEventListener('submit',async e=>{
     e.preventDefault();
-    const email=document.getElementById('login-email')?.value||'';
+    const email=(document.getElementById('login-email')?.value||'').trim().toLowerCase();
     const pwd=document.getElementById('login-pwd')?.value||'';
     const err=document.getElementById('login-err');
     err.classList.remove('on');
@@ -6487,7 +6531,6 @@ function buildSplash(){
     if(pwd.length<4){err.textContent='Mot de passe trop court';err.classList.add('on');return;}
     const btn=document.getElementById('btn-login');btn.disabled=true;btn.textContent='Connexion…';
     if(sb){
-      toast('🔄 Étape 1 — Connexion Supabase…');
       let authResult;
       try{authResult=await sb.auth.signInWithPassword({email,password:pwd});}catch(ex){err.textContent='❌ Exception auth: '+ex.message;err.classList.add('on');btn.disabled=false;btn.textContent='Se connecter';return;}
       const{data,error}=authResult;
@@ -6503,7 +6546,6 @@ function buildSplash(){
         }
         err.classList.add('on');btn.disabled=false;btn.textContent='Se connecter';return;
       }
-      toast('✅ Étape 2 — Auth OK, récup profil…');
       let profResult;
       try{profResult=await sb.from('profiles').select('role,id,nom,email').eq('auth_id',data.user.id).maybeSingle();}
       catch(ex){err.textContent='❌ Exception profil: '+ex.message;err.classList.add('on');btn.disabled=false;btn.textContent='Se connecter';await sb.auth.signOut();return;}
@@ -6516,13 +6558,12 @@ function buildSplash(){
         err.classList.add('on');btn.disabled=false;btn.textContent='Se connecter';
         await sb.auth.signOut();return;
       }
-      toast('✅ Étape 3 — Profil trouvé: '+profile.role);
       const role=profile.role||'moniteur';
-      currentProfileId=profile.id||null;
-      const nom=profile.nom||null;
       const profEmail=profile.email||email;
-      if(nom){curNom=nom;curEmail=profEmail;}
-      try{localStorage.setItem('ap-role',role);localStorage.setItem('ap-email',profEmail);if(nom)localStorage.setItem('ap-nom',nom);}catch(_){}
+      // FIX BUG-02 : centralisé via setCurUser
+      setCurUser({...profile, email:profEmail, role});
+      try{localStorage.setItem('ap-role',role);localStorage.setItem('ap-email',profEmail);if(profile.nom)localStorage.setItem('ap-nom',profile.nom);}catch(_){}
+      const nom=profile.nom||null;
       // Vider les mock events AVANT de rendre l'interface (évite d'afficher Marco pour Sherine)
       EVENTS=[];
       btn.disabled=false;btn.textContent='Se connecter';
@@ -6699,48 +6740,41 @@ function init(){
   const vu=document.getElementById('inp-vu');if(vu&&!vu.value){vu.value='';updCC('inp-vu','cc-vu');}
   // Livret status initial — restaurer depuis localStorage
   refreshLivretBadge();
-  // Restaurer la session locale (instantané)
-  // SÉCURITÉ : un rôle sans ap-nom = mode démo uniquement (pas admin possible via tamper)
-  try{
-    const savedRole=localStorage.getItem('ap-role');
-    const savedNom=localStorage.getItem('ap-nom');
-    const validRoles=['admin','moniteur','eleve'];
-    if(savedRole&&validRoles.includes(savedRole)){
-      // Si rôle admin/moniteur sans nom → peut être un tamper → forcer démo neutre
-      if(!savedNom&&savedRole==='admin'){
-        localStorage.setItem('ap-role','moniteur');splashRole='moniteur';hideAuth();switchRole('moniteur');
-      } else {
-        splashRole=savedRole;hideAuth();switchRole(savedRole);
-      }
-    } else {showAuth();}
-  }catch(e){showAuth();}
+  // Si Supabase est configuré → toujours montrer le login, la session sera vérifiée async
+  // Si pas de Supabase → mode démo avec localStorage
+  if(!sb){
+    try{
+      const savedRole=localStorage.getItem('ap-role');
+      const validRoles=['admin','moniteur','eleve'];
+      if(savedRole&&validRoles.includes(savedRole)){splashRole=savedRole;hideAuth();switchRole(savedRole);}
+      else{showAuth();}
+    }catch(e){showAuth();}
+  } else {
+    // Supabase configuré : on vérifie la session async, en attendant on montre le login
+    showAuth();
+  }
 
-  // Supabase : charger données réelles en arrière-plan
+  // Supabase : vérifier session existante et charger données
   if(sb){
     (async()=>{
-      // Vérifier session Supabase (si l'utilisateur était déjà connecté)
       const{data:{session}}=await sb.auth.getSession();
-      // SÉCURITÉ : si ap-nom est défini (= vrai login passé) mais pas de session active → forcer re-auth
-      const wasRealLogin=!!localStorage.getItem('ap-nom');
-      if(!session&&wasRealLogin){
-        curNom=null;curEmail=null;currentProfileId=null;currentFicheEleveId=null;
-        try{localStorage.removeItem('ap-role');localStorage.removeItem('ap-nom');localStorage.removeItem('ap-email');localStorage.removeItem('ap-name');}catch(_){}
+      // Pas de session active → rester sur le login
+      if(!session){
+        try{localStorage.removeItem('ap-role');localStorage.removeItem('ap-nom');localStorage.removeItem('ap-email');}catch(_){}
         showAuth();return;
       }
       if(session){
         const{data:profile}=await sb.from('profiles').select('role,id,nom,email').eq('auth_id',session.user.id).maybeSingle();
         if(profile){
           const role=profile.role;
-          currentProfileId=profile.id;
-          const nom=profile.nom||null;
           const profEmail=profile.email||session.user.email||null;
-          if(nom){curNom=nom;curEmail=profEmail;}
-          if(nom)try{localStorage.setItem('ap-nom',nom);}catch(_){}
+          // FIX BUG-02 : centralisé via setCurUser
+          setCurUser({...profile, email:profEmail, role});
+          const nom=profile.nom||null;
+          try{localStorage.setItem('ap-role',role);if(nom)localStorage.setItem('ap-nom',nom);}catch(_){}
           if(nom&&role==='eleve')applyElvName(nom,profEmail);
           if(nom&&(role==='moniteur'||role==='admin'))applyMonName(nom,profEmail);
-          if(localStorage.getItem('ap-role')!==role){
-            localStorage.setItem('ap-role',role);splashRole=role;hideAuth();switchRole(role);
-          }
+          splashRole=role;hideAuth();switchRole(role);
         }
       }
       // SÉCURITÉ : charger données réelles seulement si session authentifiée (pas en mode démo)
@@ -6829,6 +6863,66 @@ function _applyDemoUI(){
 
 document.addEventListener('DOMContentLoaded',()=>{_updateOfflineBanner();_applyDemoUI();});
 document.addEventListener('DOMContentLoaded',init);
+
+async function doLogin(){
+  const email=(document.getElementById('login-email')?.value||'').trim().toLowerCase();
+  const pwd=document.getElementById('login-pwd')?.value||'';
+  const err=document.getElementById('login-err');
+  const btn=document.getElementById('btn-login');
+  if(err)err.classList.remove('on');
+  if(!email||!email.includes('@')){if(err){err.textContent='Email invalide';err.classList.add('on');}return;}
+  if(pwd.length<4){if(err){err.textContent='Mot de passe trop court';err.classList.add('on');}return;}
+  if(btn){btn.disabled=true;btn.textContent='Connexion…';}
+  if(!sb){
+    if(err){err.textContent='⚠️ Supabase non configuré';err.classList.add('on');}
+    if(btn){btn.disabled=false;btn.textContent='Se connecter';}
+    return;
+  }
+  try{
+    const{data,error}=await sb.auth.signInWithPassword({email,password:pwd});
+    if(error){
+      if(err){err.textContent='❌ '+error.message;err.classList.add('on');}
+      if(btn){btn.disabled=false;btn.textContent='Se connecter';}
+      return;
+    }
+    const{data:profile,error:pErr}=await sb.from('profiles').select('role,id,nom,email').eq('auth_id',data.user.id).maybeSingle();
+    if(!profile){
+      if(err){err.textContent='⚠️ Profil introuvable — contacter l\'admin';err.classList.add('on');}
+      if(btn){btn.disabled=false;btn.textContent='Se connecter';}
+      await sb.auth.signOut();return;
+    }
+    const role=profile.role||'moniteur';
+    const profEmail=profile.email||email;
+    // FIX BUG-02 : centralisé via setCurUser
+    setCurUser({...profile, email:profEmail, role});
+    const nom=profile.nom||null;
+    try{localStorage.setItem('ap-role',role);localStorage.setItem('ap-email',profEmail);if(nom)localStorage.setItem('ap-nom',nom);}catch(_){}
+    EVENTS=[];
+    if(btn){btn.disabled=false;btn.textContent='Se connecter';}
+    applyDemoBadge(false);
+    hideAuth();switchRole(role);
+    if(nom&&role==='eleve')applyElvName(nom,profEmail);
+    if(nom&&(role==='moniteur'||role==='admin'))applyMonName(nom,profEmail);
+    toast('Bonjour'+(nom?' '+nom.split(' ')[0]:'')+' !');
+    if(currentProfileId){
+      if(role==='admin'){
+        ANNULATIONS=[];EVENTS=[];NOTATIONS=[];
+        Promise.all([loadMonsFromDB(),loadElevesFromDB(),loadEventsFromDB(),loadNotationsFromDB(),loadAbsencesFromDB()]).then(()=>{renderAdmin();buildCalendar('cal-head','cal-body',acalOff);});
+      }
+      if(role==='moniteur'){
+        loadEventsFromDB().then(()=>{renderSbNav();buildCalendar('cal-head','cal-body',calOff);renderToday();});
+        loadLieuxFromDB(currentProfileId).then(()=>buildLieux());
+      }
+      if(role==='eleve'){
+        Promise.all([loadEventsFromDB(),loadREMCFromDB(currentProfileId)]).then(()=>{renderCompGrid();updateLivretStats();renderEspaceEleve();});
+      }
+      loadNotationsFromDB();loadNotifsFromDB();
+    }
+  }catch(ex){
+    if(err){err.textContent='❌ Erreur: '+ex.message;err.classList.add('on');}
+    if(btn){btn.disabled=false;btn.textContent='Se connecter';}
+  }
+}
 </script>
 </body>
 </html>
