@@ -2550,8 +2550,10 @@ const ELEVES_DEFAULT=[
 ];
 let ELEVES=[];
 function initEleves(){
-  try{const r=localStorage.getItem('ap-eleves');ELEVES=r?JSON.parse(r):ELEVES_DEFAULT.map(o=>({...o}));}
-  catch(e){ELEVES=ELEVES_DEFAULT.map(o=>({...o}));}
+  // FIX BUG-01 : ne plus injecter de seed/demo. Démarrage vide → loadElevesFromDB() remplit avec la vraie DB.
+  // Pour réactiver la démo si Supabase indispo : remplacer la ligne ci-dessous par :
+  //   ELEVES = ELEVES_DEFAULT.map(o=>({...o}));
+  ELEVES = [];
 }
 function saveEleves(){try{localStorage.setItem('ap-eleves',JSON.stringify(ELEVES));}catch(e){}}
 async function addEleve(obj){ELEVES.push(obj);saveEleves();await syncEleveToDB(obj,false,ELEVES.length-1);}
@@ -2567,8 +2569,9 @@ const MONS_DEFAULT=[
 ];
 let MONS=[];
 function initMons(){
-  try{const r=localStorage.getItem('ap-mons');MONS=r?JSON.parse(r):MONS_DEFAULT.map(o=>({...o}));}
-  catch(e){MONS=MONS_DEFAULT.map(o=>({...o}));}
+  // FIX BUG-01 : ne plus injecter de seed/demo. Démarrage vide → loadMonsFromDB() remplit avec la vraie DB.
+  // Pour réactiver la démo : remplacer par MONS = MONS_DEFAULT.map(o=>({...o}));
+  MONS = [];
 }
 function saveMons(){try{localStorage.setItem('ap-mons',JSON.stringify(MONS));}catch(e){}}
 async function addMon(obj){MONS.push(obj);saveMons();await syncMonToDB(obj,false,MONS.length-1);}
@@ -2712,10 +2715,12 @@ function ensureTodayHasEvents(arr){
   return arr;
 }
 
-let EVENTS     = ensureTodayHasEvents(STORE.get('ap-events', JSON.parse(JSON.stringify(EVENTS_DEFAULT))));
-let LIEUX_DATA = STORE.get('ap-lieux',      JSON.parse(JSON.stringify(LIEUX_DEFAULT)));
-let ANNULATIONS= STORE.get('ap-annulations',JSON.parse(JSON.stringify(ANNULATIONS_DEFAULT)));
-let NOTATIONS  = STORE.get('ap-notations',  JSON.parse(JSON.stringify(NOTATIONS_DEFAULT)));
+// FIX BUG-01 : démarrage avec données vides. Les loadXxxFromDB() remplissent depuis Supabase après login.
+// Pour réactiver la démo : remplacer [] par les xxx_DEFAULT (cf. lignes ~2530 et 2640).
+let EVENTS     = [];
+let LIEUX_DATA = STORE.get('ap-lieux',      JSON.parse(JSON.stringify(LIEUX_DEFAULT))); // Lieux peuvent rester en démo (pas user-facing)
+let ANNULATIONS= [];
+let NOTATIONS  = [];
 let NOTES_PRIV = STORE.get('ap-notes-priv', {});
 
 // Helpers de persistance
