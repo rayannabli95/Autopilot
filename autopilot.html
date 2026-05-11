@@ -10,7 +10,8 @@ window.onerror=function(msg,src,line,col,err){
   return false;
 };
 </script>
-<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1">
+<!-- FIX BUG-09 (a11y WCAG 2.1 SC 1.4.4) : retiré maximum-scale=1 + ajouté viewport-fit pour safe-area iOS -->
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; img-src 'self' data: blob:; connect-src 'self' https://*.supabase.co wss://*.supabase.co; frame-ancestors 'none'; base-uri 'self'; form-action 'self';">
 <meta name="referrer" content="strict-origin-when-cross-origin">
 <title>Autopilot v6</title>
@@ -98,6 +99,10 @@ body.dark .fi,body.dark .fsel{background:var(--su2);color:var(--ink);border-colo
 *,*::before,*::after{box-sizing:border-box;margin:0;padding:0;}
 html{font-size:14px;-webkit-text-size-adjust:100%;}
 body{font-family:var(--fb);background:var(--bg);color:var(--ink);min-height:100vh;-webkit-font-smoothing:antialiased;transition:background .35s ease,color .35s ease;}
+/* FIX BUG-10 : safe-area iOS (notch + home bar). Modifiable : ajuster pour exclure côtés si besoin */
+@supports(padding:env(safe-area-inset-top)){
+  body{padding-top:env(safe-area-inset-top);padding-bottom:env(safe-area-inset-bottom);}
+}
 button,input,select,textarea{font-family:var(--fb);}
 * {transition:background-color .2s ease, color .2s ease, border-color .2s ease, box-shadow .2s ease, transform .12s ease;}
 
@@ -1847,6 +1852,23 @@ const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZ
 const SB_READY = SUPABASE_URL !== 'REMPLACE_MOI' && typeof supabase !== 'undefined';
 const sb = SB_READY ? supabase.createClient(SUPABASE_URL, SUPABASE_KEY) : null;
 
+// FIX BUG-05 : synchronise l'état d'auth (logout sur autre onglet, refresh token, expiration session).
+// Modifiable : ajoute des cas dans le switch pour gérer USER_UPDATED, MFA_CHALLENGE_VERIFIED, etc.
+if(sb){
+  sb.auth.onAuthStateChange(function(event, session){
+    try{
+      if(event==='SIGNED_OUT' || (!session && event!=='INITIAL_SESSION')){
+        try{localStorage.removeItem('ap-role');localStorage.removeItem('ap-nom');localStorage.removeItem('ap-email');}catch(_){}
+        if(typeof setCurUser==='function')setCurUser(null);
+        // Re-display login UI
+        if(typeof showAuth==='function')showAuth();
+        else location.reload();
+      }
+      // TOKEN_REFRESHED : rien à faire, supabase-js gère seul. Log pour debug si besoin.
+    }catch(e){console.warn('[auth] onAuthStateChange handler:',e);}
+  });
+}
+
 async function loadMonsFromDB(){
   if(!sb)return;
   // Vider les mock AVANT la requête — une session réelle ne doit jamais voir de données mock
@@ -1996,10 +2018,20 @@ function setupRealtime(){
 }
 
 // ── État profil connecté ──
+// FIX BUG-02 : window.CUR_USER est un alias unique vers le profil actif.
+// Toutes les anciennes références à CUR_USER doivent passer par CUR_USER (sans var/let).
+// Mise à jour automatique : appeler setCurUser(profile) après login OU à tout changement.
 let currentProfileId=null;
 let currentFicheEleveId=null;
 let curNom=null;
 let curEmail=null;
+// NB : curRole est déclaré plus bas (~l. 2766) car il existait déjà — on ne le redéclare pas ici.
+window.CUR_USER=null; // toujours défini pour éviter ReferenceError
+function setCurUser(p){
+  window.CUR_USER = p ? {id:p.id||null, nom:p.nom||null, email:p.email||null, role:p.role||null, _profile:p} : null;
+  if(p){currentProfileId=p.id||null; curNom=p.nom||null; curEmail=p.email||null; if(typeof curRole!=='undefined')curRole=p.role||null;}
+  else  {currentProfileId=null; curNom=null; curEmail=null; if(typeof curRole!=='undefined')curRole=null;}
+}
 function applyElvName(nom,email){
   curNom=nom;if(email)curEmail=email;
   const g=document.getElementById('elv-greeting');if(g)g.textContent=nom.split(' ')[0]+' 👋';
@@ -3457,8 +3489,10 @@ const AGENTS={
       const CAT_LABELS={C1:'Maîtrise du véhicule',C2:'Perception / anticipation',C3:'Conduite en situations complexes',C4:'Comportements responsables'};
       const catDone={};const catTotal={};
       REMC.forEach(cat=>{
+        // FIX BUG-03 : garde contre cat ou cat.c undefined (évite TypeError reading 'slice')
+        if(!cat||!cat.c||!Array.isArray(cat.subs))return;
         const key=cat.c.slice(0,2);catTotal[key]=(catTotal[key]||0)+cat.subs.length;
-        cat.subs.forEach(s=>{if(CS[s.c]?.lv==='v')catDone[key]=(catDone[key]||0)+1;});
+        cat.subs.forEach(s=>{if(s&&s.c&&CS[s.c]?.lv==='v')catDone[key]=(catDone[key]||0)+1;});
       });
       const weakCats=Object.keys(catTotal).filter(k=>(catDone[k]||0)/catTotal[k]<0.5).map(k=>CAT_LABELS[k]).filter(Boolean);
       // Forfait restant
@@ -4734,7 +4768,8 @@ function buildHistTbl(){
   const TYPE_LABELS={conf:'Leçon',lecon:'Leçon',pend:'Leçon',perso:'RDV Perso',absence:'Absence',abs:'Absence',dispo:'Dispo'};
   const rows=evtsFiche.map(e=>{
     const dayDate=wDates[e.d-1];
-    const dt=dayDate?WEEK_DAYS[dayDate.getDay()-1||6]+' '+dayDate.getDate()+' '+MONTHS_FR_SHORT[dayDate.getMonth()]:'Cette semaine';
+    // FIX BUG-06 : ancien `getDay()-1||6` faisait Lun→0→0||6→Dim. Correct : (jour+6)%7 mappe 0=Dim→6, 1=Lun→0, 2=Mar→1...
+    const dt=dayDate?WEEK_DAYS[(dayDate.getDay()+6)%7]+' '+dayDate.getDate()+' '+MONTHS_FR_SHORT[dayDate.getMonth()]:'Cette semaine';
     const statClass=e.t==='pend'?'bam':e.t==='conf'||e.t==='lecon'?'bg':'br';
     const statTxt=e.t==='pend'?'En attente':e.t==='conf'||e.t==='lecon'?'Confirmée':'Annulée';
     const typeTxt=TYPE_LABELS[e.t]||e.t||'—';
@@ -5503,7 +5538,8 @@ function renderEspaceEleve(){
   // Update greeting initials avatar
   const elvNom=myName;const elvInitials=elvNom.split(' ').slice(0,2).map(w=>w[0]||'').join('').toUpperCase()||'E';
   const elvPhoto=STORE.get('ap-elv-photo');
-  const elvAv=document.getElementById('elv-av-top');if(elvAv)elvAv.innerHTML=elvPhoto?`<img src="${elvPhoto}" alt="photo">`:`${elvInitials}`;
+  // FIX BUG-04 XSS : esc() sur elvPhoto et elvInitials (sources possibles : DB ou localStorage)
+  const elvAv=document.getElementById('elv-av-top');if(elvAv){if(elvPhoto){const _img=document.createElement('img');_img.src=elvPhoto;_img.alt='photo';elvAv.replaceChildren(_img);}else{elvAv.textContent=String(elvInitials||'');}}
   const elvGreet=document.getElementById('elv-greeting');if(elvGreet)elvGreet.textContent=elvNom.split(' ')[0]+' 👋';
   const wDates=getWeekDates(0);
   const upcoming=EVENTS.filter(e=>e.n===myName&&(e.t==='conf'||e.t==='pend'))
@@ -6523,11 +6559,11 @@ function buildSplash(){
         await sb.auth.signOut();return;
       }
       const role=profile.role||'moniteur';
-      currentProfileId=profile.id||null;
-      const nom=profile.nom||null;
       const profEmail=profile.email||email;
-      if(nom){curNom=nom;curEmail=profEmail;}
-      try{localStorage.setItem('ap-role',role);localStorage.setItem('ap-email',profEmail);if(nom)localStorage.setItem('ap-nom',nom);}catch(_){}
+      // FIX BUG-02 : centralisé via setCurUser
+      setCurUser({...profile, email:profEmail, role});
+      try{localStorage.setItem('ap-role',role);localStorage.setItem('ap-email',profEmail);if(profile.nom)localStorage.setItem('ap-nom',profile.nom);}catch(_){}
+      const nom=profile.nom||null;
       // Vider les mock events AVANT de rendre l'interface (évite d'afficher Marco pour Sherine)
       EVENTS=[];
       btn.disabled=false;btn.textContent='Se connecter';
@@ -6731,16 +6767,14 @@ function init(){
         const{data:profile}=await sb.from('profiles').select('role,id,nom,email').eq('auth_id',session.user.id).maybeSingle();
         if(profile){
           const role=profile.role;
-          currentProfileId=profile.id;
-          const nom=profile.nom||null;
           const profEmail=profile.email||session.user.email||null;
-          if(nom){curNom=nom;curEmail=profEmail;}
-          if(nom)try{localStorage.setItem('ap-nom',nom);}catch(_){}
+          // FIX BUG-02 : centralisé via setCurUser
+          setCurUser({...profile, email:profEmail, role});
+          const nom=profile.nom||null;
+          try{localStorage.setItem('ap-role',role);if(nom)localStorage.setItem('ap-nom',nom);}catch(_){}
           if(nom&&role==='eleve')applyElvName(nom,profEmail);
           if(nom&&(role==='moniteur'||role==='admin'))applyMonName(nom,profEmail);
-          if(localStorage.getItem('ap-role')!==role){
-            localStorage.setItem('ap-role',role);splashRole=role;hideAuth();switchRole(role);
-          }
+          splashRole=role;hideAuth();switchRole(role);
         }
       }
       // SÉCURITÉ : charger données réelles seulement si session authentifiée (pas en mode démo)
@@ -6858,10 +6892,10 @@ async function doLogin(){
       await sb.auth.signOut();return;
     }
     const role=profile.role||'moniteur';
-    currentProfileId=profile.id||null;
-    const nom=profile.nom||null;
     const profEmail=profile.email||email;
-    if(nom){curNom=nom;curEmail=profEmail;}
+    // FIX BUG-02 : centralisé via setCurUser
+    setCurUser({...profile, email:profEmail, role});
+    const nom=profile.nom||null;
     try{localStorage.setItem('ap-role',role);localStorage.setItem('ap-email',profEmail);if(nom)localStorage.setItem('ap-nom',nom);}catch(_){}
     EVENTS=[];
     if(btn){btn.disabled=false;btn.textContent='Se connecter';}
